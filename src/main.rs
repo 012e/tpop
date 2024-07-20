@@ -31,6 +31,7 @@ pub enum Commands {
 		#[arg(required = true)]
 		command: String,
 	},
+	Digest,
 }
 
 fn wrap_command(command: String) -> String {
@@ -56,7 +57,7 @@ fn main() {
 		} => {
 			if let Err(e) = Session::current()
 				.expect("must be able to get current session")
-				.create_popup_session()
+				.ensure_popup_session_exist()
 			{
 				eprintln!("Couln't prooperly create popup session: {}", e);
 				exit(1);
@@ -106,6 +107,17 @@ fn main() {
 			command: Commands::PrettyRun { command },
 		} => {
 			println!("pretty run: {}", command);
+		}
+		Args {
+			command: Commands::Digest,
+		} => {
+			if let Err(e) = Session::current()
+				.expect("must be able to get current session")
+				.convert_pane_to_popup()
+			{
+				eprintln!("Couldn't convert pane to popup: {}", e);
+				exit(1);
+			}
 		}
 	}
 }

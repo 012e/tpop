@@ -2,20 +2,20 @@ use std::process::Command;
 
 use color_eyre::eyre::Result;
 
-pub struct NewPopupConfig {
+pub struct PopupConfig {
 	pub command: Option<String>,
 	pub path: String,
 	pub height: Option<usize>,
 	pub width: Option<usize>,
 }
 
-pub fn new_popup(
-	NewPopupConfig {
+pub fn open_popup(
+	PopupConfig {
 		command,
 		path,
 		width,
 		height,
-	}: NewPopupConfig,
+	}: PopupConfig,
 ) -> Result<()> {
 	let mut cmd = Command::new("tmux");
 	cmd.arg("popup").arg("-d").arg(path);
@@ -32,6 +32,6 @@ pub fn new_popup(
 		cmd.arg("-E").arg(command);
 	}
 
-	cmd.spawn()?;
+	cmd.status()?;
 	Ok(())
 }

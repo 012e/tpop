@@ -5,7 +5,7 @@ use color_eyre::eyre::Result;
 
 use crate::tmux::{
 	self,
-	popup::{new_popup, NewPopupConfig},
+	popup::{open_popup, PopupConfig},
 };
 
 pub struct NewCommandPaneConfig {
@@ -15,6 +15,7 @@ pub struct NewCommandPaneConfig {
 	pub name: Option<String>,
 }
 
+// TODO: actually implement errors
 #[derive(thiserror::Error, Debug)]
 pub enum PopupEror {
 	#[error("Popup already exists")]
@@ -31,10 +32,6 @@ pub struct Session {
 	pub state: state::State,
 	pub name: String,
 	pub current_path: String,
-}
-
-fn wrap_command(command: String) -> String {
-	format!("sh -c '{}; read'", command)
 }
 
 impl Session {
@@ -67,15 +64,15 @@ impl Session {
 
 	pub fn hide_popup(&self) -> Result<()> {
 		if self.state == state::State::Popup {
-			Command::new("tmux").arg("detach").spawn()?;
+			Command::new("tmux").arg("detach").status()?;
 		}
 		Ok(())
 	}
 
 	pub fn show_popup(&self) -> Result<()> {
 		if let state::State::Normal = self.state {
-			self.create_popup_session()?;
-			new_popup(NewPopupConfig {
+			self.ensure_popup_session_exist()?;
+			open_popup(PopupConfig {
 				command: Some("tmux attach -t ".to_owned() + &self.get_popup_session_name()),
 				path: self.current_path.clone(),
 				height: Some(80),
@@ -98,7 +95,7 @@ impl Session {
 			name,
 		}: NewCommandPaneConfig,
 	) -> Result<()> {
-		self.create_popup_session()?;
+		self.ensure_popup_session_exist()?;
 		let mut cmd = Command::new("tmux");
 		cmd.arg("new-window")
 			.arg("-t")
@@ -106,7 +103,7 @@ impl Session {
 			.arg("-n")
 			.arg(name.unwrap_or("cmdRunner".to_owned()))
 			.arg(command)
-			.spawn()?;
+			.status()?;
 
 		if !silent {
 			Command::new("tmux")
@@ -115,15 +112,22 @@ impl Session {
 				.arg(&self.get_popup_session_name())
 				.arg("pane-exited")
 				.arg("detach")
-				.spawn()?;
+				.status()?;
 			self.show_popup()?;
 		}
 
 		Ok(())
 	}
 
-	pub fn create_popup_session(&self) -> Result<()> {
+	/// Creates new tmux popup session without displaying it (detached).
+	/// Popup sessions is defined as a session that starts with "popup" prefix.
+	/// The path of the popup session is the same as the current session.
+	pub fn ensure_popup_session_exist(&self) -> Result<()> {
+		// TODO: check for duplication
 		let popup_session_name = format!("popup{}", self.name);
+		if tmux::commands::has_session(popup_session_name.clone())? {
+			return Ok(());
+		}
 		Command::new("tmux")
 			.arg("new-session")
 			.arg("-d")
@@ -131,7 +135,34 @@ impl Session {
 			.arg(popup_session_name)
 			.arg("-c")
 			.arg(self.current_path.clone())
-			.spawn()?;
+			.status()?;
+		Ok(())
+	}
+
+	pub fn convert_pane_to_popup(&self) -> Result<()> {
+		if self.state == state::State::Popup {
+			return Ok(());
+		}
+
+		let current_window_index = tmux::commands::get_current_session_property("#{window_index}")?;
+
+		// Create new window to replace the old one.
+		// Can only be ran after we have gotten the window index we wanted
+		// or it will replace the index of the target window.
+		Command::new("tmux")
+			.arg("new-window")
+			.status()
+			.expect("must be able to create new window");
+
+		// Ensure that popup session must exists so that we can move current window there
+		self.ensure_popup_session_exist()?;
+
+		tmux::commands::move_window(
+			self.name.clone(),
+			current_window_index,
+			self.get_popup_session_name(),
+		)?;
+
 		Ok(())
 	}
 }

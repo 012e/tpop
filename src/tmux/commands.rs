@@ -1,4 +1,7 @@
-use std::{io, process::Command};
+use std::{
+	io,
+	process::{Command, ExitStatus, Stdio},
+};
 
 pub fn new_session_detached(name: &str, create_new: bool) -> Result<(), io::Error> {
 	let mut cmd = Command::new("tmux");
@@ -6,7 +9,7 @@ pub fn new_session_detached(name: &str, create_new: bool) -> Result<(), io::Erro
 	if !create_new {
 		cmd.arg("-A");
 	}
-	cmd.spawn()?;
+	cmd.status()?;
 	Ok(())
 }
 
@@ -16,7 +19,7 @@ pub fn new_session(name: &str, create_new: bool) -> Result<(), io::Error> {
 	if !create_new {
 		cmd.arg("-A");
 	}
-	cmd.spawn()?;
+	cmd.status()?;
 	Ok(())
 }
 
@@ -27,7 +30,7 @@ pub fn run_command(command: &str, target: &str) -> Result<(), io::Error> {
 		.arg(target)
 		.arg(command)
 		.arg("Enter")
-		.spawn()?;
+		.status()?;
 	Ok(())
 }
 
@@ -52,5 +55,34 @@ pub fn get_session_property(property: &str, target: &str) -> Result<String, io::
 }
 
 pub fn get_session_name() -> Result<String, io::Error> {
-	get_current_session_property("#S")
+	get_current_session_property("#{session_name}")
+}
+
+pub fn move_window(
+	src_session: String,
+	window_index: String,
+	dest_session: String,
+) -> Result<(), io::Error> {
+	let src = format!("{src_session}:{window_index}");
+	Command::new("tmux")
+		.stdout(Stdio::null())
+		.stderr(Stdio::null())
+		.arg("move-window")
+		.arg("-s")
+		.arg(src)
+		.arg("-t")
+		.arg(dest_session)
+		.status()?;
+	Ok(())
+}
+
+pub fn has_session(s: String) -> Result<bool, io::Error> {
+	let exit_status = Command::new("tmux")
+		.stdout(Stdio::null())
+		.stderr(Stdio::null())
+		.arg("has-session")
+		.arg("-t")
+		.arg(s)
+		.status()?;
+	Ok(exit_status.success())
 }

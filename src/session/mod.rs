@@ -151,6 +151,8 @@ impl Session {
 		// or it will replace the index of the target window.
 		Command::new("tmux")
 			.arg("new-window")
+			.arg("-c")
+			.arg(self.current_path.clone())
 			.status()
 			.expect("must be able to create new window");
 

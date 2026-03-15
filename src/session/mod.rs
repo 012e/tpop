@@ -1,5 +1,9 @@
 pub mod state;
-use std::process::Command;
+use core::fmt;
+use std::{
+	io::{stdin, Read, Write},
+	process::Command,
+};
 
 use color_eyre::eyre::Result;
 
@@ -73,7 +77,8 @@ impl Session {
 		if let state::State::Normal = self.state {
 			self.ensure_popup_session_exist()?;
 			open_popup(PopupConfig {
-				command: Some("tmux attach -t ".to_owned() + &self.get_popup_session_name()),
+				// Using the more robust 'new -A' approach from the incoming branch
+				command: Some("tmux new -A -s ".to_owned() + &self.get_popup_session_name()),
 				path: self.current_path.clone(),
 				height: Some(80),
 				width: Some(80),
@@ -119,6 +124,13 @@ impl Session {
 		Ok(())
 	}
 
+	fn pause(&self) {
+		let mut stdout = std::io::stdout();
+		let _ = stdout.write(b"Press Enter to continue...");
+		let _ = stdout.flush();
+		let _ = stdin().read(&mut [0]);
+	}
+
 	/// Creates new tmux popup session without displaying it (detached).
 	/// Popup sessions is defined as a session that starts with "popup" prefix.
 	/// The path of the popup session is the same as the current session.
@@ -147,8 +159,6 @@ impl Session {
 		let current_window_index = tmux::commands::get_current_session_property("#{window_index}")?;
 
 		// Create new window to replace the old one.
-		// Can only be ran after we have gotten the window index we wanted
-		// or it will replace the index of the target window.
 		Command::new("tmux")
 			.arg("new-window")
 			.arg("-c")

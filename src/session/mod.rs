@@ -9,7 +9,8 @@ use color_eyre::eyre::Result;
 
 use crate::tmux::{
 	self,
-	popup::{open_popup, PopupConfig},
+	commands::get_session_name,
+	popup::{self, open_popup, PopupConfig},
 };
 
 pub struct NewCommandPaneConfig {
@@ -36,25 +37,54 @@ pub struct Session {
 	pub state: state::State,
 	pub name: String,
 	pub current_path: String,
+	pub current_window_id: String,
+}
+
+const POPUP_PREFIX: &str = "popup-";
+
+fn extract_session_state(session_name: &String) -> state::State {
+	if session_name.starts_with(POPUP_PREFIX) {
+		state::State::Popup
+	} else {
+		state::State::Normal
+	}
 }
 
 impl Session {
 	pub fn current() -> Result<Self> {
-		let state = state::get_state()?;
-		let name = tmux::commands::get_session_name()?;
+		let session_name = get_session_name()?;
+
+		let state = extract_session_state(&session_name);
+		let name = session_name;
 		let current_path = tmux::commands::get_current_session_property("#{pane_current_path}")?;
+		let current_window_id = tmux::commands::get_current_session_property("#{window_id}")?;
 		Ok(Self {
 			state,
 			name,
 			current_path,
+			current_window_id,
 		})
 	}
 
 	fn get_popup_session_name(&self) -> String {
-		if self.name.starts_with("popup") {
+		if self.name.starts_with(POPUP_PREFIX) {
 			self.name.clone()
 		} else {
-			format!("popup{}", self.name)
+			format!(
+				"{}[{}][{}]",
+				POPUP_PREFIX, self.current_window_id, self.name
+			)
+		}
+	}
+
+	fn get_parent_session_name(&self) -> String {
+		if !self.name.starts_with(POPUP_PREFIX) {
+			self.name.clone()
+		} else {
+			format!(
+				"{}[{}][{}]",
+				POPUP_PREFIX, self.current_window_id, self.name
+			)
 		}
 	}
 
@@ -136,7 +166,7 @@ impl Session {
 	/// The path of the popup session is the same as the current session.
 	pub fn ensure_popup_session_exist(&self) -> Result<()> {
 		// TODO: check for duplication
-		let popup_session_name = format!("popup{}", self.name);
+		let popup_session_name = self.get_popup_session_name();
 		if tmux::commands::has_session(popup_session_name.clone())? {
 			return Ok(());
 		}

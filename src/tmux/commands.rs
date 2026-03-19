@@ -76,6 +76,26 @@ pub fn move_window(
 	Ok(())
 }
 
+pub fn kill_session_by_session_name(session_name: String) -> Result<bool, io::Error> {
+	let exit_status = Command::new("tmux")
+		.stdout(Stdio::null())
+		.stderr(Stdio::null())
+		.arg("kill-session")
+		.arg("-t")
+		.arg(session_name)
+		.status()?;
+	Ok(exit_status.success())
+}
+
+pub fn kill_current_window() -> Result<bool, io::Error> {
+	let exit_status = Command::new("tmux")
+		.stdout(Stdio::null())
+		.stderr(Stdio::null())
+		.arg("kill-window")
+		.status()?;
+	Ok(exit_status.success())
+}
+
 pub fn has_session(s: String) -> Result<bool, io::Error> {
 	let exit_status = Command::new("tmux")
 		.stdout(Stdio::null())

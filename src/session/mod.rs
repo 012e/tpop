@@ -1,6 +1,7 @@
 pub mod state;
 use core::fmt;
 use std::{
+	hint::assert_unchecked,
 	io::{stdin, Read, Write},
 	process::Command,
 };
@@ -9,7 +10,7 @@ use color_eyre::eyre::Result;
 
 use crate::tmux::{
 	self,
-	commands::get_session_name,
+	commands::{get_session_name, kill_current_window, kill_session_by_session_name},
 	popup::{self, open_popup, PopupConfig},
 };
 
@@ -49,6 +50,9 @@ fn extract_session_state(session_name: &String) -> state::State {
 		state::State::Normal
 	}
 }
+fn format_session_name(session_name: &str, current_window_id: &str) -> String {
+	format!("{}[{}][{}]", POPUP_PREFIX, current_window_id, session_name)
+}
 
 impl Session {
 	pub fn current() -> Result<Self> {
@@ -70,10 +74,7 @@ impl Session {
 		if self.name.starts_with(POPUP_PREFIX) {
 			self.name.clone()
 		} else {
-			format!(
-				"{}[{}][{}]",
-				POPUP_PREFIX, self.current_window_id, self.name
-			)
+			format_session_name(&self.name, &self.current_window_id)
 		}
 	}
 
@@ -86,6 +87,25 @@ impl Session {
 				POPUP_PREFIX, self.current_window_id, self.name
 			)
 		}
+	}
+
+	fn kill_popups(&self) -> Result<()> {
+		assert!(self.state == state::State::Normal);
+		kill_session_by_session_name(self.get_popup_session_name())?;
+		Ok(())
+	}
+
+	pub fn kill_current_window_and_popups(&self) -> Result<()> {
+		match self.state {
+			state::State::Normal => {
+				self.kill_popups()?;
+				kill_current_window()?;
+			}
+			state::State::Popup => {
+				kill_current_window()?;
+			}
+		};
+		Ok(())
 	}
 
 	pub fn toggle_popup(&self) -> Result<()> {

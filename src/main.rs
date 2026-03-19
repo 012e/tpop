@@ -18,6 +18,7 @@ pub enum Commands {
 	Show,
 	Hide,
 	Create,
+	KillWindow,
 	Run {
 		#[clap(short, long, default_value_t = false)]
 		silent: bool,
@@ -100,6 +101,17 @@ fn main() {
 				name,
 			}) {
 				eprintln!("Error while running command: {}", e);
+				exit(1);
+			}
+		}
+		Args {
+			command: Commands::KillWindow,
+		} => {
+			if let Err(e) = Session::current()
+				.expect("must be able to get current session")
+				.kill_current_window_and_popups()
+			{
+				eprintln!("Couldn't properly kill current window and popups: {}", e);
 				exit(1);
 			}
 		}
